@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CityFlow AI</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+    background: linear-gradient(180deg, #0b0b0c, #1c1c1e);
+    color: #f5f5f7;
+  }
+
+  header {
+    text-align: center;
+    padding: 40px 20px 10px;
+    font-size: 36px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+  }
+
+  .subtitle {
+    text-align: center;
+    color: #a1a1a6;
+    margin-bottom: 30px;
+    font-size: 16px;
+  }
+
+  #map {
+    height: 400px;
+    margin: 20px;
+    border-radius: 25px;
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+  }
+
+  .card {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 25px;
+    padding: 25px;
+    margin: 20px auto;
+    max-width: 650px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  h3 {
+    font-weight: 500;
+    margin-bottom: 15px;
+  }
+
+  button {
+    padding: 14px 28px;
+    border-radius: 20px;
+    border: none;
+    background: linear-gradient(145deg, #3a8dff, #0066ff);
+    color: white;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    box-shadow: 0 10px 25px rgba(0,102,255,0.3);
+  }
+
+  button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 30px rgba(0,102,255,0.4);
+  }
+
+  #result {
+    margin-top: 15px;
+    font-size: 18px;
+    line-height: 1.6;
+  }
+
+  canvas {
+    max-width: 500px !important;
+    margin: auto;
+  }
+
+ #langSwitch {
+  position: fixed;
+  top: 80px; /* было 20 → стало ниже */
+  left: 20px;
+}
+
+#langSwitch button {
+  margin-right: 5px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+</style>
+</head>
+
+<body>
+
+<header>CityFlow AI</header>
+
+
+<p class="subtitle">
+Smart insights for cafes & restaurants in real time
+</p>
+
+<div id="map"></div>
+<div class="card">
+  <h3>Filter</h3>
+  <button onclick="filterPlaces('all')">All</button>
+  <button onclick="filterPlaces('cafe')">☕ Cafe</button>
+  <button onclick="filterPlaces('restaurant')">🍽️ Restaurant</button>
+</div>
+
+<div class="card">
+  <h3 id="placeTitle">Select a place</h3>
+  <div style="max-width:600px; margin:auto;">
+    <canvas id="chart"></canvas>
+  </div>
+</div>
+
+<div class="card">
+  <button onclick="predict()">🔮 Predict Crowd</button>
+  <p id="result"></p>
+</div>
+
+<script>
+var map = L.map('map').setView([42.8746, 74.5698], 13);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+  .addTo(map);
+
+let currentData = [];
+let isPredicted = false; // 🔥 ключ
+
+var ctx = document.getElementById('chart');
+
+var chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: ['Mon','Tue','Wed','Thu','Fri'],
+    datasets: [{
+      label: 'Visitors',
+      data: [],
+      borderWidth: 3,
+      tension: 0.4
+    }]
+  }
+});
+
+var places = [
+  {name: "Sierra Coffee", type: "☕ Cafe", coords: [42.876, 74.59]},
+  {name: "Bublik Cafe", type: "☕ Cafe", coords: [42.87, 74.60]},
+  {name: "Adriano Coffee", type: "☕ Cafe", coords: [42.88, 74.58]},
+  {name: "Navat", type: "🍽️ Restaurant", coords: [42.874, 74.57]},
+  {name: "Faiza", type: "🍽️ Restaurant", coords: [42.87, 74.56]},
+  {name: "Arzu", type: "🍽️ Restaurant", coords: [42.878, 74.61]}
+];
+
+function selectPlace(place) {
+  let data = Array.from({length:5}, () => Math.floor(Math.random()*100)+20);
+  currentData = data;
+  isPredicted = false;
+
+  document.getElementById('placeTitle').innerText =
+    place.name + " (" + place.type + ")";
+
+  chart.data.datasets[0].data = data;
+  chart.update();
+
+  document.getElementById('result').innerText = "";
+}
+
+let markers = [];
+
+function loadMarkers(filter="all") {
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+
+  places.forEach(place => {
+    let type = place.type.includes("Cafe") ? "cafe" : "restaurant";
+
+    if (filter === "all" || type === filter) {
+      let marker = L.marker(place.coords)
+        .addTo(map)
+        .bindPopup(place.type + " " + place.name)
+        .on('click', () => selectPlace(place));
+
+      markers.push(marker);
+    }
+  });
+}
+
+loadMarkers();
+
+function filterPlaces(type) {
+  loadMarkers(type);
+}
+
+function predict() {
+  if (currentData.length === 0) {
+    document.getElementById('result').innerText = "Select a place first!";
+    return;
+  }
+
+  if (isPredicted) {
+    document.getElementById('result').innerText = "";
+    isPredicted = false;
+    return;
+  }
+
+  let avg = currentData.reduce((a, b) => a + b, 0) / currentData.length;
+  let score = Math.min(100, Math.round(avg));
+
+  let level = "";
+  let emoji = "";
+
+  if (score < 40) {
+    level = "Low";
+    emoji = "🟢";
+  } else if (score < 70) {
+    level = "Medium";
+    emoji = "🟡";
+  } else {
+    level = "High";
+    emoji = "🔴";
+  }
+
+  document.getElementById('result').innerHTML =
+    `${emoji} Busy Level: <b>${level}</b><br>⭐ Popularity: <b>${score}/100</b>`;
+
+  isPredicted = true;
+}
+function recommend() {
+  let bestPlace = null;
+  let bestScore = 0;
+
+  places.forEach(place => {
+    let data = Array.from({length:5}, () => Math.floor(Math.random()*100)+20);
+    let avg = data.reduce((a,b)=>a+b,0)/data.length;
+
+    if (avg > bestScore) {
+      bestScore = avg;
+      bestPlace = place;
+    }
+  });
+
+  let level = bestScore > 70 ? "🔥 Very Popular" :
+              bestScore > 40 ? "👍 Good Choice" :
+              "😌 Quiet Place";
+
+  document.getElementById('aiResult').innerHTML =
+    `Best place: <b>${bestPlace.name}</b><br>
+     Score: ${Math.round(bestScore)}/100<br>
+     ${level}`;
+}
+</script>
+
+</body>
+</html>
